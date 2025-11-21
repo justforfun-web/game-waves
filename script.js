@@ -16,7 +16,7 @@ resize();
 // ASSETS
 const playerImg = new Image();
 // PREVIEW (for testing in this environment) — keeps your uploaded image visible immediately:
-playerImg.src = '/mnt/data/8d18a9f7-fd73-4bb0-929a-ab573213d1e1.png';
+playerImg.src = 'assets/player_normal.png';
 // PRODUCTION (uncomment when you upload player_normal.png to /assets):
 // playerImg.src = 'assets/player_normal.png';
 
