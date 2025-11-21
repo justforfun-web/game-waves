@@ -1,0 +1,42 @@
+body {
+    margin: 0;
+    overflow: hidden;
+    background: black;
+    font-family: Arial, sans-serif;
+}
+
+canvas {
+    display: block;
+}
+
+/* MOBILE CONTROLS */
+#controls {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 15px;
+}
+
+#controls button {
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid white;
+    color: white;
+    padding: 15px 20px;
+    font-size: 22px;
+    border-radius: 10px;
+}
+
+/* MUSIC BUTTON */
+#musicToggle {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    font-size: 26px;
+    padding: 10px 15px;
+    background: rgba(255,255,255,0.2);
+    border: 2px solid white;
+    color: white;
+    border-radius: 8px;
+}
