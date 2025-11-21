@@ -4,25 +4,24 @@ const ctx = canvas.getContext("2d");
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-// Load Images
+// Load Images (USE CORRECT PATHS)
 const imgNormal = new Image();
-imgNormal.src = "assets/normal_image.jpg";
+imgNormal.src = "assets/player_normal.png";   // change to your actual file
 
 const imgHit = new Image();
-imgHit.src = "assets/player_hit.jpg";
+imgHit.src = "assets/player_hit.png";         // change to your actual file
 
 const imgWin = new Image();
-imgWin.src = "assets/player_win.jpg";
+imgWin.src = "assets/player_win.png";         // change to your actual file
 
 // Sounds
 const hitSound = new Audio("assets/player_hit.m4a");
 const winSound = new Audio("assets/player_win.m4a");
 
 // Player State
-let playerState = "normal"; 
-// normal | hit | win
+let playerState = "normal"; // normal | hit | win
 
-// Player Object
+// Player object
 const player = {
     x: canvas.width / 2 - 25,
     y: canvas.height - 120,
@@ -32,14 +31,14 @@ const player = {
     hitTimer: 0
 };
 
-// Bullets + Enemies
+// Bullets & Enemies
 let bullets = [];
 let enemies = [];
 let enemyTimer = 0;
 let score = 0;
 const WIN_SCORE = 20;
 
-// Mobile Buttons
+// MOBILE CONTROLS
 document.getElementById("leftBtn").onmousedown = () => moveLeft = true;
 document.getElementById("rightBtn").onmousedown = () => moveRight = true;
 document.getElementById("shootBtn").onmousedown = shoot;
@@ -48,7 +47,7 @@ document.onmouseup = () => { moveLeft = false; moveRight = false; };
 let moveLeft = false;
 let moveRight = false;
 
-// Shooting
+// SHOOT FUNCTION
 function shoot() {
     bullets.push({ x: player.x + 25, y: player.y, width: 10, height: 20 });
 }
@@ -66,7 +65,9 @@ function createEnemy() {
 function update() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Win state
+    drawStars();
+
+    // Win screen
     if (playerState === "win") {
         ctx.drawImage(imgWin, player.x, player.y, player.width, player.height);
         return;
@@ -76,18 +77,15 @@ function update() {
     if (moveLeft && player.x > 0) player.x -= player.speed;
     if (moveRight && player.x < canvas.width - player.width) player.x += player.speed;
 
-    // Draw Player by State
-    if (playerState === "normal") {
-        ctx.drawImage(imgNormal, player.x, player.y, player.width, player.height);
-    }
+    // Player image based on state
+    if (playerState === "normal") ctx.drawImage(imgNormal, player.x, player.y, player.width, player.height);
     if (playerState === "hit") {
         ctx.drawImage(imgHit, player.x, player.y, player.width, player.height);
-
         player.hitTimer--;
         if (player.hitTimer <= 0) playerState = "normal";
     }
 
-    // Update Bullets
+    // Bullets
     bullets.forEach((b, i) => {
         b.y -= 10;
         ctx.fillStyle = "yellow";
@@ -99,16 +97,15 @@ function update() {
     enemyTimer++;
     if (enemyTimer % 50 === 0) createEnemy();
 
-    // Update Enemies
+    // Enemy logic
     enemies.forEach((e, ei) => {
         e.y += 3;
         ctx.fillStyle = "red";
         ctx.fillRect(e.x, e.y, e.width, e.height);
 
-        // Remove off-screen
         if (e.y > canvas.height) enemies.splice(ei, 1);
 
-        // Player hit collision
+        // Player collision
         if (
             player.x < e.x + e.width &&
             player.x + player.width > e.x &&
@@ -121,7 +118,7 @@ function update() {
             enemies.splice(ei, 1);
         }
 
-        // Bullet hits enemy
+        // Bullet collision
         bullets.forEach((b, bi) => {
             if (
                 b.x < e.x + e.width &&
@@ -133,7 +130,6 @@ function update() {
                 bullets.splice(bi, 1);
                 score++;
 
-                // WIN CONDITION
                 if (score >= WIN_SCORE) {
                     playerState = "win";
                     winSound.play();
@@ -142,12 +138,10 @@ function update() {
         });
     });
 
-    drawStars();
-
     requestAnimationFrame(update);
 }
 
-// STAR BACKGROUND
+// Stars (background)
 let stars = [];
 for (let i = 0; i < 100; i++)
     stars.push({ x: Math.random() * canvas.width, y: Math.random() * canvas.height });
@@ -162,9 +156,3 @@ function drawStars() {
 }
 
 update();
-
-
-playerNormalImg.onerror = () => console.log("ERROR: normal_image.jpg not found!");
-playerHitImg.onerror = () => console.log("ERROR: player_hit.jpg not found!");
-playerWinImg.onerror = () => console.log("ERROR: player_win.jpg not found!");
-
