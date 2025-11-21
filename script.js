@@ -1,158 +1,272 @@
-const canvas = document.getElementById("gameCanvas");
-const ctx = canvas.getContext("2d");
+/* Flap & Wave game
+   - Hold pointer (mouse/touch/left or right click) to move up
+   - Release to fall (gravity)
+   - Player leaves a white trail
+   - Obstacles come from the right and oscillate up/down
+   - Game speed increases with time
+*/
 
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+// --- CANVAS SETUP ---
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
 
-// Load Images (USE CORRECT PATHS)
-const imgNormal = new Image();
-imgNormal.src = "assets/player_normal.png";   // change to your actual file
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
 
-const imgHit = new Image();
-imgHit.src = "assets/player_hit.png";         // change to your actual file
+// --- ASSETS ---
+// Default: use the local uploaded image so you can preview here.
+// When publishing to GitHub, replace the src with "assets/player.png" (or a file inside your repo).
+const playerImg = new Image();
+// local uploaded path (for preview in this environment):
+playerImg.src = '/mnt/data/8d18a9f7-fd73-4bb0-929a-ab573213d1e1.png';
+// production (uncomment and use after you push /assets/player.png):
+// playerImg.src = 'assets/player.png';
 
-const imgWin = new Image();
-imgWin.src = "assets/player_win.png";         // change to your actual file
-
-// Sounds
-const hitSound = new Audio("assets/player_hit.m4a");
-const winSound = new Audio("assets/player_win.m4a");
-
-// Player State
-let playerState = "normal"; // normal | hit | win
-
-// Player object
+// player settings
 const player = {
-    x: canvas.width / 2 - 25,
-    y: canvas.height - 120,
-    width: 70,
-    height: 70,
-    speed: 8,
-    hitTimer: 0
+  x: canvas.width * 0.2,
+  y: canvas.height / 2,
+  radius: 28,
+  vy: 0,          // vertical velocity
+  gravity: 0.45,
+  thrust: -8,
+  trail: [],
+  maxTrail: 20
 };
 
-// Bullets & Enemies
-let bullets = [];
-let enemies = [];
-let enemyTimer = 0;
+// controls
+let pressing = false;      // pointer held (mouse/touch)
+let running = true;        // game running
 let score = 0;
-const WIN_SCORE = 20;
+let speedMultiplier = 1.0; // increases over time
 
-// MOBILE CONTROLS
-document.getElementById("leftBtn").onmousedown = () => moveLeft = true;
-document.getElementById("rightBtn").onmousedown = () => moveRight = true;
-document.getElementById("shootBtn").onmousedown = shoot;
-document.onmouseup = () => { moveLeft = false; moveRight = false; };
+// obstacles
+const obstacles = [];
+const OB_SPAWN_INTERVAL = 120; // frames (will speed up with multiplier)
 
-let moveLeft = false;
-let moveRight = false;
+// frame counters
+let frame = 0;
+let spawnCounter = 0;
 
-// SHOOT FUNCTION
-function shoot() {
-    bullets.push({ x: player.x + 25, y: player.y, width: 10, height: 20 });
+// HUD & restart
+const scoreEl = document.getElementById('score');
+const speedEl = document.getElementById('speed');
+const restartBtn = document.getElementById('restart');
+
+// prevent context menu on right click
+window.addEventListener('contextmenu', e => e.preventDefault());
+
+// pointer events: works for mouse & touch
+function pointerDown(e) {
+  e.preventDefault();
+  pressing = true;
+}
+function pointerUp(e) {
+  e.preventDefault();
+  pressing = false;
+}
+window.addEventListener('pointerdown', pointerDown);
+window.addEventListener('pointerup', pointerUp);
+window.addEventListener('pointercancel', pointerUp);
+window.addEventListener('touchend', pointerUp);
+
+// keyboard (spacebar for convenience)
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space') pressing = true;
+});
+window.addEventListener('keyup', e => {
+  if (e.code === 'Space') pressing = false;
+});
+
+// --- obstacle factory ---
+// obstacles are vertical rectangles that oscillate vertically as they move left
+function spawnObstacle() {
+  // obstacle config
+  const w = Math.max(60, Math.min(160, 120 * Math.random()));
+  const gap = Math.max(120, 160 - Math.floor(speedMultiplier*20)); // gap smaller when speed higher
+  const baseY = Math.random() * (canvas.height * 0.6) + canvas.height * 0.2; // center of vertical oscillation
+  const amplitude = Math.random() * (canvas.height * 0.18) + 30; // oscillation amplitude
+  const frequency = 0.004 + Math.random() * 0.008; // oscillation speed
+
+  obstacles.push({
+    x: canvas.width + w,
+    width: w,
+    gap,
+    centerY: baseY,
+    amp: amplitude,
+    freq: frequency,
+    life: 0 // used for sin phase
+  });
 }
 
-// Spawn enemies
-function createEnemy() {
-    enemies.push({
-        x: Math.random() * (canvas.width - 40),
-        y: -50,
-        width: 40,
-        height: 40
-    });
+// check collision between player circle and a rect
+function circleRectCollision(cx, cy, r, rx, ry, rw, rh) {
+  const nearestX = Math.max(rx, Math.min(cx, rx + rw));
+  const nearestY = Math.max(ry, Math.min(cy, ry + rh));
+  const dx = cx - nearestX;
+  const dy = cy - nearestY;
+  return (dx*dx + dy*dy) < (r*r);
 }
 
+// --- GAME LOOP ---
 function update() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (!running) return;
+  frame++;
+  spawnCounter++;
 
-    drawStars();
+  // increase difficulty gradually
+  if (frame % 300 === 0) {
+    speedMultiplier = Math.min(3.0, +(speedMultiplier + 0.05).toFixed(2));
+  }
 
-    // Win screen
-    if (playerState === "win") {
-        ctx.drawImage(imgWin, player.x, player.y, player.width, player.height);
-        return;
+  // physics: thrust while pressing
+  if (pressing) {
+    player.vy = player.thrust * (1 + (speedMultiplier-1)*0.08); // small scale with speed
+  } else {
+    player.vy += player.gravity * (1 + (speedMultiplier-1)*0.08);
+  }
+  player.y += player.vy;
+
+  // keep player inside bounds
+  if (player.y < player.radius) { player.y = player.radius; player.vy = 0; }
+  if (player.y > canvas.height - player.radius) { player.y = canvas.height - player.radius; player.vy = 0; }
+
+  // trail: push position and trim
+  player.trail.push({x: player.x, y: player.y});
+  if (player.trail.length > player.maxTrail) player.trail.shift();
+
+  // spawn obstacles faster as speed increases
+  const spawnIntervalNow = Math.max(40, Math.round(OB_SPAWN_INTERVAL / speedMultiplier));
+  if (spawnCounter >= spawnIntervalNow) {
+    spawnCounter = 0;
+    spawnObstacle();
+  }
+
+  // move obstacles left and update life
+  for (let i = obstacles.length - 1; i >= 0; i--) {
+    const ob = obstacles[i];
+    ob.x -= (3 + speedMultiplier*1.5); // left speed increases with multiplier
+    ob.life += 1;
+
+    // compute current vertical offset by sine
+    const cy = ob.centerY + ob.amp * Math.sin(ob.life * ob.freq * (1 + speedMultiplier*0.12));
+
+    // top rect
+    const topRect = { x: ob.x, y: 0, w: ob.width, h: cy - ob.gap/2 };
+    // bottom rect
+    const botRect = { x: ob.x, y: cy + ob.gap/2, w: ob.width, h: canvas.height - (cy + ob.gap/2) };
+
+    // collision tests
+    if (circleRectCollision(player.x, player.y, player.radius, topRect.x, topRect.y, topRect.w, topRect.h) ||
+        circleRectCollision(player.x, player.y, player.radius, botRect.x, botRect.y, botRect.w, botRect.h)) {
+      // hit -> end game
+      endGame();
+      return;
     }
 
-    // Player movement
-    if (moveLeft && player.x > 0) player.x -= player.speed;
-    if (moveRight && player.x < canvas.width - player.width) player.x += player.speed;
-
-    // Player image based on state
-    if (playerState === "normal") ctx.drawImage(imgNormal, player.x, player.y, player.width, player.height);
-    if (playerState === "hit") {
-        ctx.drawImage(imgHit, player.x, player.y, player.width, player.height);
-        player.hitTimer--;
-        if (player.hitTimer <= 0) playerState = "normal";
+    // award score when obstacle passes the player
+    if (!ob.passed && (ob.x + ob.width) < player.x) {
+      ob.passed = true;
+      score++;
+      scoreEl.innerText = `Score: ${score}`;
     }
 
-    // Bullets
-    bullets.forEach((b, i) => {
-        b.y -= 10;
-        ctx.fillStyle = "yellow";
-        ctx.fillRect(b.x, b.y, b.width, b.height);
-        if (b.y < 0) bullets.splice(i, 1);
-    });
+    // remove off-screen obstacles
+    if (ob.x + ob.width < -50) obstacles.splice(i, 1);
+  }
 
-    // Spawn enemies
-    enemyTimer++;
-    if (enemyTimer % 50 === 0) createEnemy();
+  // update HUD
+  speedEl.innerText = `Speed: ${speedMultiplier.toFixed(2)}x`;
 
-    // Enemy logic
-    enemies.forEach((e, ei) => {
-        e.y += 3;
-        ctx.fillStyle = "red";
-        ctx.fillRect(e.x, e.y, e.width, e.height);
+  // draw
+  render();
 
-        if (e.y > canvas.height) enemies.splice(ei, 1);
-
-        // Player collision
-        if (
-            player.x < e.x + e.width &&
-            player.x + player.width > e.x &&
-            player.y < e.y + e.height &&
-            player.y + player.height > e.y
-        ) {
-            playerState = "hit";
-            player.hitTimer = 30;
-            hitSound.play();
-            enemies.splice(ei, 1);
-        }
-
-        // Bullet collision
-        bullets.forEach((b, bi) => {
-            if (
-                b.x < e.x + e.width &&
-                b.x + b.width > e.x &&
-                b.y < e.y + e.height &&
-                b.y + b.height > e.y
-            ) {
-                enemies.splice(ei, 1);
-                bullets.splice(bi, 1);
-                score++;
-
-                if (score >= WIN_SCORE) {
-                    playerState = "win";
-                    winSound.play();
-                }
-            }
-        });
-    });
-
-    requestAnimationFrame(update);
+  requestAnimationFrame(update);
 }
 
-// Stars (background)
-let stars = [];
-for (let i = 0; i < 100; i++)
-    stars.push({ x: Math.random() * canvas.width, y: Math.random() * canvas.height });
+// --- render ---
+function render() {
+  // clear & background subtle gradient
+  ctx.clearRect(0,0,canvas.width,canvas.height);
 
-function drawStars() {
-    ctx.fillStyle = "white";
-    stars.forEach(s => {
-        ctx.fillRect(s.x, s.y, 2, 2);
-        s.y += 1;
-        if (s.y > canvas.height) s.y = 0;
-    });
+  // draw faint stars (simple)
+  for (let s = 0; s < 60; s++) {
+    ctx.fillStyle = 'rgba(255,255,255,0.03)';
+    ctx.fillRect((s*73 + frame*0.6) % canvas.width, (s*37) % canvas.height, 2, 2);
+  }
+
+  // draw trail: older points are more transparent
+  ctx.lineWidth = 2;
+  for (let i = 0; i < player.trail.length - 1; i++) {
+    const a = player.trail[i], b = player.trail[i+1];
+    const t = i / player.trail.length;
+    ctx.strokeStyle = `rgba(255,255,255,${0.12 + 0.6 * t})`;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+
+  // draw player (glow + image)
+  // glow
+  const glowRadius = player.radius * 1.6;
+  const grad = ctx.createRadialGradient(player.x, player.y, player.radius*0.2, player.x, player.y, glowRadius);
+  grad.addColorStop(0, 'rgba(255,255,255,0.18)');
+  grad.addColorStop(1, 'rgba(255,255,255,0.00)');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(player.x, player.y, glowRadius, 0, Math.PI*2);
+  ctx.fill();
+
+  // image centered
+  const imgW = player.radius * 2;
+  const imgH = player.radius * 2;
+  if (playerImg.complete) {
+    ctx.drawImage(playerImg, player.x - player.radius, player.y - player.radius, imgW, imgH);
+  } else {
+    // fallback: draw a circle
+    ctx.fillStyle = 'white';
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, player.radius, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  // draw obstacles
+  obstacles.forEach(ob => {
+    const cy = ob.centerY + ob.amp * Math.sin(ob.life * ob.freq * (1 + speedMultiplier*0.12));
+    // top
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.fillRect(ob.x, 0, ob.width, cy - ob.gap/2);
+    // bottom
+    ctx.fillRect(ob.x, cy + ob.gap/2, ob.width, canvas.height - (cy + ob.gap/2));
+
+    // outline neon
+    ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(ob.x, 0, ob.width, cy - ob.gap/2);
+    ctx.strokeRect(ob.x, cy + ob.gap/2, ob.width, canvas.height - (cy + ob.gap/2));
+  });
 }
 
+// --- end game ---
+function endGame() {
+  running = false;
+  restartBtn.style.display = 'inline-block';
+  restartBtn.onclick = () => location.reload();
+  // show a simple "Game Over" overlay
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle = 'white';
+  ctx.font = 'bold 36px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('Game Over', canvas.width/2, canvas.height/2 - 20);
+  ctx.font = '18px sans-serif';
+  ctx.fillText(`Score: ${score}`, canvas.width/2, canvas.height/2 + 16);
+}
+
+// --- start the loop ---
 update();
