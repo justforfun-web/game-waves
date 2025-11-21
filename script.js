@@ -6,17 +6,17 @@ canvas.height = window.innerHeight;
 
 // Load Images
 const imgNormal = new Image();
-imgNormal.src = "assets/player_normal.png";
+imgNormal.src = "assets/normal_image.jpg";
 
 const imgHit = new Image();
-imgHit.src = "assets/player_hit.png";
+imgHit.src = "assets/player_hit.jpg";
 
 const imgWin = new Image();
-imgWin.src = "assets/player_win.png";
+imgWin.src = "assets/player_win.jpg";
 
 // Sounds
-const hitSound = new Audio("assets/hit.mp3");
-const winSound = new Audio("assets/win.mp3");
+const hitSound = new Audio("assets/player_hit.m4a");
+const winSound = new Audio("assets/player_win.m4a");
 
 // Player State
 let playerState = "normal"; 
