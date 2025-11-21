@@ -20,7 +20,7 @@ resize();
 // ASSETS
 const playerImg = new Image();
 // PREVIEW (local uploaded file) — used here so you can preview instantly in this environment:
-playerImg.src = '/mnt/data/8d18a9f7-fd73-4bb0-929a-ab573213d1e1.png';
+playerImg.src = 'assets/player_normal.png';
 // PRODUCTION (uncomment when on GitHub Pages and upload to assets/):
 // playerImg.src = 'assets/player_normal.png';
 
