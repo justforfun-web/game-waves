@@ -1,17 +1,26 @@
+// GD Wave — Final updated script (cleaned & syntax-checked)
+// Uses your assets in /assets/ (player_normal.png, player_hit.png, player_win.png, player_hit.m4a, player_win.m4a)
+
 // ---------- Canvas setup (high-DPI aware) ----------
 const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
+const ctx = canvas && canvas.getContext ? canvas.getContext('2d') : null;
+
+if (!canvas || !ctx) {
+  console.warn('Canvas or context not found. Make sure index.html contains <canvas id="gameCanvas">');
+}
 
 function setCanvasSize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
   const dpr = Math.max(1, window.devicePixelRatio || 1);
-  canvas.style.width = w + 'px';
-  canvas.style.height = h + 'px';
-  canvas.width = Math.round(w * dpr);
-  canvas.height = Math.round(h * dpr);
-  // draw in CSS pixels
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (canvas) {
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    // draw in CSS pixels
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
 }
 window.addEventListener('resize', setCanvasSize);
 setCanvasSize();
@@ -42,6 +51,10 @@ const scoreEl = document.getElementById('score');
 const timeEl = document.getElementById('time');
 const restartBtn = document.getElementById('restart');
 
+if (!scoreEl || !timeEl || !restartBtn) {
+  console.warn('HUD elements missing: scoreEl/timeEl/restartBtn should exist in DOM.');
+}
+
 // ---------- Game state ----------
 let running = true;
 let holding = false;
@@ -65,7 +78,7 @@ const obstacles = [];
 let spawnCounter = 0;
 
 // ---------- Input (pointer + touch + keyboard) ----------
-function pointerDown(e) { e.preventDefault(); holding = true; }
+function pointerDown(e) { e && e.preventDefault(); holding = true; }
 function pointerUp(e) { e && e.preventDefault(); holding = false; }
 
 window.addEventListener('pointerdown', pointerDown, {passive:false});
@@ -116,10 +129,12 @@ function resetGame() {
   startTimestamp = performance.now();
   player.x = window.innerWidth * 0.22;
   player.y = window.innerHeight * 0.5;
-  scoreEl.textContent = 'Score: 0';
-  timeEl.textContent = 'Time: 0s';
-  restartBtn.style.display = 'none';
-  restartBtn.setAttribute('aria-hidden', 'true');
+  if (scoreEl) scoreEl.textContent = 'Score: 0';
+  if (timeEl) timeEl.textContent = 'Time: 0s';
+  if (restartBtn) {
+    restartBtn.style.display = 'none';
+    restartBtn.setAttribute('aria-hidden', 'true');
+  }
   // ensure loop runs
   requestAnimationFrame(loop);
 }
@@ -129,12 +144,15 @@ function restartHandler(e) {
   e && e.preventDefault();
   resetGame();
 }
-restartBtn.addEventListener('click', restartHandler);
-restartBtn.addEventListener('touchstart', function(e){ e.preventDefault(); restartHandler(); }, {passive:false});
+if (restartBtn) {
+  restartBtn.addEventListener('click', restartHandler);
+  restartBtn.addEventListener('touchstart', function(e){ e && e.preventDefault(); restartHandler(); }, {passive:false});
+}
 
 // ---------- End states ----------
 function showEndOverlay(text) {
   // draw a subtle overlay; leave restart button clickable
+  if (!ctx) return;
   ctx.save();
   ctx.fillStyle = 'rgba(5,3,8,0.56)';
   ctx.fillRect(0,0,canvas.width,canvas.height);
@@ -153,8 +171,10 @@ function onHit() {
   running = false;
   player.state = 'hit';
   try { hitSound.currentTime = 0; hitSound.play(); } catch(e){ console.warn('hit sound playback failed', e); }
-  restartBtn.style.display = 'inline-block';
-  restartBtn.setAttribute('aria-hidden', 'false');
+  if (restartBtn) {
+    restartBtn.style.display = 'inline-block';
+    restartBtn.setAttribute('aria-hidden', 'false');
+  }
   showEndOverlay('Game Over');
 }
 
@@ -164,13 +184,16 @@ function onWin() {
   running = false;
   player.state = 'win';
   try { winSound.currentTime = 0; winSound.play(); } catch(e){ console.warn('win sound playback failed', e); }
-  restartBtn.style.display = 'inline-block';
-  restartBtn.setAttribute('aria-hidden', 'false');
+  if (restartBtn) {
+    restartBtn.style.display = 'inline-block';
+    restartBtn.setAttribute('aria-hidden', 'false');
+  }
   showEndOverlay('YOU WIN!');
 }
 
 // ---------- Render helpers ----------
 function neonBackground() {
+  if (!ctx) return;
   // Option C radial neon: draw to canvas for consistent look across devices
   const cx = canvas.width / 2;
   const cy = canvas.height / 2;
@@ -185,6 +208,7 @@ function neonBackground() {
 }
 
 function drawTrail() {
+  if (!ctx) return;
   // Trail A: long smooth fading trail
   if (player.trail.length < 2) return;
   ctx.lineJoin = 'round';
@@ -204,6 +228,7 @@ function drawTrail() {
 }
 
 function drawPlayer() {
+  if (!ctx) return;
   ctx.save();
   ctx.translate(player.x, player.y);
   // glow behind
@@ -227,6 +252,7 @@ function drawPlayer() {
 }
 
 function drawObstacles() {
+  if (!ctx) return;
   obstacles.forEach(ob => {
     const osc = Math.sin((performance.now()/1000) * ob.osc * 2 * Math.PI);
     const centerY = ob.centerY + osc * 18 * ob.osc; // small vertical oscillation
@@ -271,7 +297,7 @@ function loop(now) {
 
   const elapsedMs = now - startTimestamp;
   const elapsedSec = Math.floor(elapsedMs / 1000);
-  timeEl.textContent = `Time: ${elapsedSec}s`;
+  if (timeEl) timeEl.textContent = `Time: ${elapsedSec}s`;
 
   // win at 120s (2 minutes)
   if (elapsedSec >= 120) {
@@ -338,7 +364,7 @@ function loop(now) {
     if (!ob.passed && (ob.x + ob.width) < player.x) {
       ob.passed = true;
       score++;
-      scoreEl.textContent = `Score: ${score}`;
+      if (scoreEl) scoreEl.textContent = `Score: ${score}`;
     }
 
     // remove off-screen obstacles
