@@ -162,3 +162,9 @@ function drawStars() {
 }
 
 update();
+
+
+playerNormalImg.onerror = () => console.log("ERROR: normal_image.jpg not found!");
+playerHitImg.onerror = () => console.log("ERROR: player_hit.jpg not found!");
+playerWinImg.onerror = () => console.log("ERROR: player_win.jpg not found!");
+
