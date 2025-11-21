@@ -9,7 +9,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Canvas fills viewport */
+/* Canvas full viewport */
 #gameCanvas { display:block; width:100vw; height:100vh; }
 
 /* HUD */
