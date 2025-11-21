@@ -2,17 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
   <title>GD Wave — Mountain Spikes</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <canvas id="gameCanvas"></canvas>
+  <canvas id="gameCanvas" aria-label="Game canvas"></canvas>
 
-  <div id="hud">
+  <div id="hud" role="status" aria-live="polite">
     <div id="score">Score: 0</div>
     <div id="speed">Speed: 1.00x</div>
-    <button id="restart" style="display:none">Restart</button>
+    <button id="restart" style="display:none" aria-hidden="true">Restart</button>
   </div>
 
   <script src="script.js"></script>
