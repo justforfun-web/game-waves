@@ -1,12 +1,15 @@
-/* Flap & Wave game
-   - Hold pointer (mouse/touch/left or right click) to move up
-   - Release to fall (gravity)
-   - Player leaves a white trail
-   - Obstacles come from the right and oscillate up/down
-   - Game speed increases with time
+/* Geometry Dash — Wave style (triangles obstacles)
+   Controls:
+    - Hold anywhere (pointer/mouse/touch) to move UP
+    - Release to fall (gravity)
+   Features:
+    - White trail behind player (line)
+    - Triangle obstacles coming from the right
+    - Obstacles oscillate vertically (up/down) while moving left
+    - Game speed increases over time
 */
 
-// --- CANVAS SETUP ---
+// --- Canvas setup
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
@@ -17,256 +20,266 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-// --- ASSETS ---
-// Default: use the local uploaded image so you can preview here.
-// When publishing to GitHub, replace the src with "assets/player.png" (or a file inside your repo).
+// --- Assets (preview uses your uploaded file; change to 'assets/player_wave.png' after upload)
 const playerImg = new Image();
-// local uploaded path (for preview in this environment):
+// PREVIEW local path (development environment). Keep only for preview here.
 playerImg.src = '/mnt/data/8d18a9f7-fd73-4bb0-929a-ab573213d1e1.png';
-// production (uncomment and use after you push /assets/player.png):
-// playerImg.src = 'assets/player.png';
+// PRODUCTION: after uploading to GitHub, comment out the preview above and use:
+// playerImg.src = 'assets/player_wave.png';
 
-// player settings
+// --- Player (GD-wave style movement)
 const player = {
   x: canvas.width * 0.2,
-  y: canvas.height / 2,
-  radius: 28,
-  vy: 0,          // vertical velocity
+  y: canvas.height * 0.5,
+  radius: 26,
+  vy: 0,           // vertical velocity
   gravity: 0.45,
-  thrust: -8,
+  thrust: -7.6,    // upward velocity while holding
   trail: [],
-  maxTrail: 20
+  maxTrail: 26
 };
 
 // controls
-let pressing = false;      // pointer held (mouse/touch)
-let running = true;        // game running
+let holding = false;
+let running = true;
 let score = 0;
-let speedMultiplier = 1.0; // increases over time
+let speedMultiplier = 1.0;
 
-// obstacles
+// obstacles array
 const obstacles = [];
-const OB_SPAWN_INTERVAL = 120; // frames (will speed up with multiplier)
+const BASE_SPAWN = 110; // base frames between spawns
 
-// frame counters
 let frame = 0;
 let spawnCounter = 0;
 
-// HUD & restart
+// hud elements
 const scoreEl = document.getElementById('score');
 const speedEl = document.getElementById('speed');
 const restartBtn = document.getElementById('restart');
 
-// prevent context menu on right click
 window.addEventListener('contextmenu', e => e.preventDefault());
 
-// pointer events: works for mouse & touch
-function pointerDown(e) {
-  e.preventDefault();
-  pressing = true;
-}
-function pointerUp(e) {
-  e.preventDefault();
-  pressing = false;
-}
-window.addEventListener('pointerdown', pointerDown);
-window.addEventListener('pointerup', pointerUp);
-window.addEventListener('pointercancel', pointerUp);
-window.addEventListener('touchend', pointerUp);
+// Pointer (mouse/touch/right click) handlers
+function down(e){ e.preventDefault(); holding = true; }
+function up(e){ e.preventDefault(); holding = false; }
+window.addEventListener('pointerdown', down);
+window.addEventListener('pointerup', up);
+window.addEventListener('pointercancel', up);
+window.addEventListener('touchend', up);
 
-// keyboard (spacebar for convenience)
-window.addEventListener('keydown', e => {
-  if (e.code === 'Space') pressing = true;
-});
-window.addEventListener('keyup', e => {
-  if (e.code === 'Space') pressing = false;
-});
+// keyboard space for convenience
+window.addEventListener('keydown', e => { if (e.code === 'Space') holding = true; });
+window.addEventListener('keyup', e => { if (e.code === 'Space') holding = false; });
 
-// --- obstacle factory ---
-// obstacles are vertical rectangles that oscillate vertically as they move left
+// --- obstacle factory (triangles)
 function spawnObstacle() {
-  // obstacle config
-  const w = Math.max(60, Math.min(160, 120 * Math.random()));
-  const gap = Math.max(120, 160 - Math.floor(speedMultiplier*20)); // gap smaller when speed higher
-  const baseY = Math.random() * (canvas.height * 0.6) + canvas.height * 0.2; // center of vertical oscillation
-  const amplitude = Math.random() * (canvas.height * 0.18) + 30; // oscillation amplitude
-  const frequency = 0.004 + Math.random() * 0.008; // oscillation speed
+  const w = Math.max(50, Math.random() * 150);         // obstacle width (visual)
+  const gap = Math.max(110, 180 - Math.floor(speedMultiplier * 18)); // gap size
+  const centerY = Math.random() * (canvas.height * 0.6) + canvas.height * 0.2;
+  const amp = Math.random() * (canvas.height * 0.18) + 30; // vertical oscillation amplitude
+  const freq = 0.004 + Math.random() * 0.009;
 
   obstacles.push({
     x: canvas.width + w,
     width: w,
-    gap,
-    centerY: baseY,
-    amp: amplitude,
-    freq: frequency,
-    life: 0 // used for sin phase
+    gap: gap,
+    centerY: centerY,
+    amp: amp,
+    freq: freq,
+    life: 0,
+    passed: false
   });
 }
 
-// check collision between player circle and a rect
+// collision helper (circle vs rect)
 function circleRectCollision(cx, cy, r, rx, ry, rw, rh) {
   const nearestX = Math.max(rx, Math.min(cx, rx + rw));
   const nearestY = Math.max(ry, Math.min(cy, ry + rh));
-  const dx = cx - nearestX;
-  const dy = cy - nearestY;
+  const dx = cx - nearestX, dy = cy - nearestY;
   return (dx*dx + dy*dy) < (r*r);
 }
 
-// --- GAME LOOP ---
-function update() {
+// --- main loop
+function update(){
   if (!running) return;
-  frame++;
-  spawnCounter++;
+  frame++; spawnCounter++;
 
-  // increase difficulty gradually
+  // gradually increase difficulty
   if (frame % 300 === 0) {
-    speedMultiplier = Math.min(3.0, +(speedMultiplier + 0.05).toFixed(2));
+    speedMultiplier = Math.min(3.2, +(speedMultiplier + 0.05).toFixed(2));
   }
 
-  // physics: thrust while pressing
-  if (pressing) {
-    player.vy = player.thrust * (1 + (speedMultiplier-1)*0.08); // small scale with speed
+  // physics: while holding, player gets thrust; otherwise gravity
+  if (holding) {
+    player.vy = player.thrust * (1 + (speedMultiplier - 1) * 0.06);
   } else {
-    player.vy += player.gravity * (1 + (speedMultiplier-1)*0.08);
+    player.vy += player.gravity * (1 + (speedMultiplier - 1) * 0.06);
   }
   player.y += player.vy;
 
-  // keep player inside bounds
+  // clamp
   if (player.y < player.radius) { player.y = player.radius; player.vy = 0; }
   if (player.y > canvas.height - player.radius) { player.y = canvas.height - player.radius; player.vy = 0; }
 
-  // trail: push position and trim
-  player.trail.push({x: player.x, y: player.y});
+  // trail
+  player.trail.push({ x: player.x, y: player.y });
   if (player.trail.length > player.maxTrail) player.trail.shift();
 
-  // spawn obstacles faster as speed increases
-  const spawnIntervalNow = Math.max(40, Math.round(OB_SPAWN_INTERVAL / speedMultiplier));
+  // spawn obstacles faster when speed increases
+  const spawnIntervalNow = Math.max(40, Math.round(BASE_SPAWN / speedMultiplier));
   if (spawnCounter >= spawnIntervalNow) {
-    spawnCounter = 0;
-    spawnObstacle();
+    spawnCounter = 0; spawnObstacle();
   }
 
-  // move obstacles left and update life
-  for (let i = obstacles.length - 1; i >= 0; i--) {
+  // update obstacles
+  for (let i = obstacles.length - 1; i >= 0; i--){
     const ob = obstacles[i];
-    ob.x -= (3 + speedMultiplier*1.5); // left speed increases with multiplier
-    ob.life += 1;
+    ob.x -= (3 + speedMultiplier * 1.6); // left speed
+    ob.life++;
 
-    // compute current vertical offset by sine
-    const cy = ob.centerY + ob.amp * Math.sin(ob.life * ob.freq * (1 + speedMultiplier*0.12));
+    // vertical oscillation center
+    const cy = ob.centerY + ob.amp * Math.sin(ob.life * ob.freq * (1 + speedMultiplier * 0.12));
 
-    // top rect
+    // top rect (from y=0 to gap top)
     const topRect = { x: ob.x, y: 0, w: ob.width, h: cy - ob.gap/2 };
-    // bottom rect
     const botRect = { x: ob.x, y: cy + ob.gap/2, w: ob.width, h: canvas.height - (cy + ob.gap/2) };
 
-    // collision tests
+    // triangle visuals will be drawn for top and bottom (see render)
+    // collision check using rects
     if (circleRectCollision(player.x, player.y, player.radius, topRect.x, topRect.y, topRect.w, topRect.h) ||
         circleRectCollision(player.x, player.y, player.radius, botRect.x, botRect.y, botRect.w, botRect.h)) {
-      // hit -> end game
+      // crash
       endGame();
       return;
     }
 
-    // award score when obstacle passes the player
+    // scoring when passed
     if (!ob.passed && (ob.x + ob.width) < player.x) {
       ob.passed = true;
       score++;
       scoreEl.innerText = `Score: ${score}`;
     }
 
-    // remove off-screen obstacles
-    if (ob.x + ob.width < -50) obstacles.splice(i, 1);
+    // remove offscreen
+    if (ob.x + ob.width < -100) obstacles.splice(i,1);
   }
 
-  // update HUD
   speedEl.innerText = `Speed: ${speedMultiplier.toFixed(2)}x`;
 
-  // draw
   render();
-
   requestAnimationFrame(update);
 }
 
-// --- render ---
-function render() {
-  // clear & background subtle gradient
+// --- rendering
+function render(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  // draw faint stars (simple)
-  for (let s = 0; s < 60; s++) {
-    ctx.fillStyle = 'rgba(255,255,255,0.03)';
-    ctx.fillRect((s*73 + frame*0.6) % canvas.width, (s*37) % canvas.height, 2, 2);
+  // subtle star background
+  for (let s = 0; s < 60; s++){
+    ctx.fillStyle = 'rgba(255,255,255,0.02)';
+    ctx.fillRect((s*83 + frame*0.5) % canvas.width, (s*41) % canvas.height, 2, 2);
   }
 
-  // draw trail: older points are more transparent
+  // draw white trail (straight line)
   ctx.lineWidth = 2;
-  for (let i = 0; i < player.trail.length - 1; i++) {
+  for (let i = 0; i < player.trail.length - 1; i++){
     const a = player.trail[i], b = player.trail[i+1];
     const t = i / player.trail.length;
-    ctx.strokeStyle = `rgba(255,255,255,${0.12 + 0.6 * t})`;
+    ctx.strokeStyle = `rgba(255,255,255,${0.08 + 0.7 * t})`;
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
     ctx.stroke();
   }
 
-  // draw player (glow + image)
-  // glow
-  const glowRadius = player.radius * 1.6;
-  const grad = ctx.createRadialGradient(player.x, player.y, player.radius*0.2, player.x, player.y, glowRadius);
-  grad.addColorStop(0, 'rgba(255,255,255,0.18)');
-  grad.addColorStop(1, 'rgba(255,255,255,0.00)');
-  ctx.fillStyle = grad;
-  ctx.beginPath();
-  ctx.arc(player.x, player.y, glowRadius, 0, Math.PI*2);
-  ctx.fill();
+  // draw player glow + image
+  const glowR = player.radius * 1.5;
+  const g = ctx.createRadialGradient(player.x, player.y, 1, player.x, player.y, glowR);
+  g.addColorStop(0, 'rgba(255,255,255,0.14)');
+  g.addColorStop(1, 'rgba(255,255,255,0.00)');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(player.x, player.y, glowR, 0, Math.PI*2); ctx.fill();
 
-  // image centered
-  const imgW = player.radius * 2;
-  const imgH = player.radius * 2;
-  if (playerImg.complete) {
+  // player image or fallback circle
+  const imgW = player.radius * 2, imgH = player.radius * 2;
+  if (playerImg.complete && playerImg.naturalWidth !== 0) {
     ctx.drawImage(playerImg, player.x - player.radius, player.y - player.radius, imgW, imgH);
   } else {
-    // fallback: draw a circle
-    ctx.fillStyle = 'white';
-    ctx.beginPath();
-    ctx.arc(player.x, player.y, player.radius, 0, Math.PI*2);
-    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(player.x, player.y, player.radius, 0, Math.PI*2); ctx.fill();
   }
 
-  // draw obstacles
+  // draw triangle obstacles (top and bottom)
   obstacles.forEach(ob => {
-    const cy = ob.centerY + ob.amp * Math.sin(ob.life * ob.freq * (1 + speedMultiplier*0.12));
-    // top
-    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    const cy = ob.centerY + ob.amp * Math.sin(ob.life * ob.freq * (1 + speedMultiplier * 0.12));
+    // top triangle (pointing down)
+    drawTriangle(ob.x + ob.width/2, cy - ob.gap/2, ob.width, 'down');
+    // bottom triangle (pointing up)
+    drawTriangle(ob.x + ob.width/2, cy + ob.gap/2, ob.width, 'up');
+
+    // faint fill for sides (rectangles) to match collision rects
+    ctx.fillStyle = 'rgba(255,255,255,0.06)';
     ctx.fillRect(ob.x, 0, ob.width, cy - ob.gap/2);
-    // bottom
     ctx.fillRect(ob.x, cy + ob.gap/2, ob.width, canvas.height - (cy + ob.gap/2));
 
-    // outline neon
-    ctx.strokeStyle = 'rgba(255,255,255,0.14)';
-    ctx.lineWidth = 2;
+    // neon outline
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 1.5;
     ctx.strokeRect(ob.x, 0, ob.width, cy - ob.gap/2);
     ctx.strokeRect(ob.x, cy + ob.gap/2, ob.width, canvas.height - (cy + ob.gap/2));
   });
 }
 
-// --- end game ---
+// helper: draw triangle at cx,cy width w, direction up/down
+function drawTriangle(cx, cy, w, dir='up') {
+  const h = w * 0.7;
+  ctx.beginPath();
+  if (dir === 'up') {
+    ctx.moveTo(cx - w/2, cy + h/2);
+    ctx.lineTo(cx + w/2, cy + h/2);
+    ctx.lineTo(cx, cy - h/2);
+  } else {
+    // pointing down
+    ctx.moveTo(cx - w/2, cy - h/2);
+    ctx.lineTo(cx + w/2, cy - h/2);
+    ctx.lineTo(cx, cy + h/2);
+  }
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(255,255,255,0.12)';
+  ctx.fill();
+
+  // inner sharp white
+  ctx.beginPath();
+  if (dir === 'up') {
+    ctx.moveTo(cx - w*0.22, cy + h*0.22);
+    ctx.lineTo(cx + w*0.22, cy + h*0.22);
+    ctx.lineTo(cx, cy - h*0.22);
+  } else {
+    ctx.moveTo(cx - w*0.22, cy - h*0.22);
+    ctx.lineTo(cx + w*0.22, cy - h*0.22);
+    ctx.lineTo(cx, cy + h*0.22);
+  }
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(255,255,255,0.22)';
+  ctx.fill();
+}
+
+// --- end game
 function endGame() {
   running = false;
   restartBtn.style.display = 'inline-block';
   restartBtn.onclick = () => location.reload();
-  // show a simple "Game Over" overlay
-  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+
+  // overlay
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
   ctx.fillRect(0,0,canvas.width,canvas.height);
   ctx.fillStyle = 'white';
-  ctx.font = 'bold 36px sans-serif';
+  ctx.font = 'bold 34px sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('Game Over', canvas.width/2, canvas.height/2 - 20);
+  ctx.fillText('Game Over', canvas.width/2, canvas.height/2 - 18);
   ctx.font = '18px sans-serif';
-  ctx.fillText(`Score: ${score}`, canvas.width/2, canvas.height/2 + 16);
+  ctx.fillText(`Score: ${score}`, canvas.width/2, canvas.height/2 + 12);
 }
 
-// --- start the loop ---
+// start loop
 update();
