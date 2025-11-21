@@ -5,42 +5,22 @@ body {
   color: #fff;
   font-family: Inter, system-ui, Arial;
   overflow: hidden;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* canvas fills viewport */
-#gameCanvas {
-  display: block;
-  width: 100vw;
-  height: 100vh;
-  background: radial-gradient(ellipse at center, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0.00) 40%), #000;
-}
+/* Canvas fills viewport */
+#gameCanvas { display:block; width:100vw; height:100vh; }
 
-/* simple HUD */
-#hud {
-  position: fixed;
-  left: 14px;
-  top: 12px;
-  z-index: 10;
-  display:flex;
-  gap:12px;
-  align-items:center;
-}
-#hud #score, #hud #speed {
+/* HUD */
+#hud { position: fixed; left: 14px; top: 12px; z-index: 10; display:flex; gap:12px; align-items:center; }
+#hud > div {
   background: rgba(255,255,255,0.04);
-  padding: 8px 10px;
-  border-radius: 8px;
+  padding: 8px 10px; border-radius: 8px;
   border: 1px solid rgba(255,255,255,0.06);
-  backdrop-filter: blur(6px);
   font-size:14px;
 }
 #restart {
-  padding: 8px 10px;
-  border-radius:8px;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.08);
-  color: white;
-  cursor: pointer;
+  padding: 8px 10px; border-radius:8px; background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08); color: white; cursor: pointer;
 }
