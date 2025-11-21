@@ -1,196 +1,244 @@
-// CANVAS
-const canvas = document.getElementById("gameCanvas");
-const ctx = canvas.getContext("2d");
+// ---------- Canvas setup (high-DPI aware) ----------
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
 
-function resize() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+function setCanvasSize() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  canvas.width = Math.round(w * dpr);
+  canvas.height = Math.round(h * dpr);
+  // draw in CSS pixels
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
-resize();
-window.addEventListener("resize", resize);
+window.addEventListener('resize', setCanvasSize);
+setCanvasSize();
 
-// HUD
-const scoreEl = document.getElementById("score");
-const restartBtn = document.getElementById("restart");
+// ---------- Assets ----------
+const ASSET_PREFIX = 'assets/';
 
-// PLAYER ASSETS
 const playerImg = new Image();
-playerImg.src = "assets/player_normal.png";
+playerImg.src = ASSET_PREFIX + 'player_normal.png';
 
-const hitImg = new Image();
-hitImg.src = "assets/player_hit.png";
+const playerHitImg = new Image();
+playerHitImg.src = ASSET_PREFIX + 'player_hit.png';
 
-const winImg = new Image();
-winImg.src = "assets/player_win.png";
+const playerWinImg = new Image();
+playerWinImg.src = ASSET_PREFIX + 'player_win.png';
 
-// SOUND
-const hitSound = new Audio("assets/player_hit.m4a");
-const winSound = new Audio("assets/player_win.m4a");
+const hitSound = new Audio(ASSET_PREFIX + 'player_hit.m4a');
+const winSound = new Audio(ASSET_PREFIX + 'player_win.m4a');
 
-// GAME STATE
+playerImg.onerror = () => console.warn('Could not load', playerImg.src);
+playerHitImg.onerror = () => console.warn('Could not load', playerHitImg.src);
+playerWinImg.onerror = () => console.warn('Could not load', playerWinImg.src);
+hitSound.onerror = () => console.warn('Could not load', hitSound.src);
+winSound.onerror = () => console.warn('Could not load', winSound.src);
+
+// ---------- DOM HUD ----------
+const scoreEl = document.getElementById('score');
+const timeEl = document.getElementById('time');
+const restartBtn = document.getElementById('restart');
+
+// ---------- Game state ----------
 let running = true;
 let holding = false;
 let score = 0;
-let startTime = Date.now();
+let startTimestamp = null; // set when game actually starts or is reset
 
-let difficultySpeed = 3;
-let jumpStrength = -4;   // Jump A (very small jump)
-let gravity = 0.32;
+let difficultySpeed = 3.0; // base obstacle speed
+const GRAVITY = 0.32;
+const JUMP = -4.0; // Jump A: very small jump
 
-// PLAYER
 const player = {
-  x: canvas.width * 0.22,
-  y: canvas.height * 0.5,
+  x: window.innerWidth * 0.22,
+  y: window.innerHeight * 0.5,
   vy: 0,
   radius: 28,
-  rotation: 0,
-  state: "normal",
-  trail: []
+  state: 'normal', // normal | hit | win
+  trail: [] // array of {x,y}
 };
 
-// OBSTACLES
 const obstacles = [];
+let spawnCounter = 0;
 
-// CONTROL
-window.addEventListener("pointerdown", e => { holding = true; });
-window.addEventListener("pointerup", e => { holding = false; });
-window.addEventListener("touchend", () => { holding = false; });
+// ---------- Input (pointer + touch + keyboard) ----------
+function pointerDown(e) { e.preventDefault(); holding = true; }
+function pointerUp(e) { e && e.preventDefault(); holding = false; }
 
-window.addEventListener("keydown", e => {
-  if (e.code === "Space") holding = true;
-});
-window.addEventListener("keyup", e => {
-  if (e.code === "Space") holding = false;
-});
+window.addEventListener('pointerdown', pointerDown, {passive:false});
+window.addEventListener('pointerup', pointerUp, {passive:false});
+window.addEventListener('pointercancel', pointerUp, {passive:false});
 
-// SPAWN OBSTACLES
+window.addEventListener('touchend', pointerUp, {passive:false});
+window.addEventListener('keydown', e => { if (e.code === 'Space') holding = true; });
+window.addEventListener('keyup', e => { if (e.code === 'Space') holding = false; });
+
+// ---------- Utility: collision (circle vs rect) ----------
+function circleRectCollision(cx, cy, r, rx, ry, rw, rh) {
+  const nearestX = Math.max(rx, Math.min(cx, rx + rw));
+  const nearestY = Math.max(ry, Math.min(cy, ry + rh));
+  const dx = cx - nearestX, dy = cy - nearestY;
+  return (dx*dx + dy*dy) < (r*r);
+}
+
+// ---------- Spawn obstacles ----------
 function spawnObstacle() {
-  const gap = Math.max(180 - difficultySpeed * 12, 120); // dynamic difficulty
-  const width = 90 + Math.random() * 90;
-
-  const centerY = Math.random() * (canvas.height * 0.55) + canvas.height * 0.2;
-
+  // width and gap scale with screen size a bit
+  const baseGap = Math.max(160, Math.round(canvas.height * 0.18)); // comfortable default
+  const gap = Math.max(140, baseGap - Math.round(difficultySpeed * 8)); // larger gap, reduces as speed grows
+  const width = 70 + Math.random() * 90;
+  const centerY = Math.random() * (canvas.height * 0.6) + canvas.height * 0.2;
   obstacles.push({
     x: canvas.width + width,
     width,
     gap,
     centerY,
-    passed: false
+    passed: false,
+    osc: Math.random() * 0.9 + 0.3 // small vertical oscillation factor
   });
 }
 
-let spawnCounter = 0;
-
-// COLLISION CHECK
-function circleRectCollision(cx, cy, r, rx, ry, rw, rh) {
-  const nearestX = Math.max(rx, Math.min(cx, rx + rw));
-  const nearestY = Math.max(ry, Math.min(cy, ry + rh));
-  const dx = cx - nearestX, dy = cy - nearestY;
-  return (dx * dx + dy * dy < r * r);
+// ---------- Reset / Restart ----------
+function resetGame() {
+  console.log('Game reset');
+  running = true;
+  holding = false;
+  score = 0;
+  obstacles.length = 0;
+  player.trail.length = 0;
+  player.vy = 0;
+  player.state = 'normal';
+  difficultySpeed = 3.0;
+  spawnCounter = 0;
+  startTimestamp = performance.now();
+  player.x = window.innerWidth * 0.22;
+  player.y = window.innerHeight * 0.5;
+  scoreEl.textContent = 'Score: 0';
+  timeEl.textContent = 'Time: 0s';
+  restartBtn.style.display = 'none';
+  restartBtn.setAttribute('aria-hidden', 'true');
+  // ensure loop runs
+  requestAnimationFrame(loop);
 }
 
-// GAME LOOP
-function update() {
+// Bind restart (works for click & touch)
+function restartHandler(e) {
+  e && e.preventDefault();
+  resetGame();
+}
+restartBtn.addEventListener('click', restartHandler);
+restartBtn.addEventListener('touchstart', function(e){ e.preventDefault(); restartHandler(); }, {passive:false});
+
+// ---------- End states ----------
+function showEndOverlay(text) {
+  // draw a subtle overlay; leave restart button clickable
+  ctx.save();
+  ctx.fillStyle = 'rgba(5,3,8,0.56)';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 36px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(text, canvas.width/2, canvas.height/2 - 12);
+  ctx.font = '18px sans-serif';
+  ctx.fillText(`Score: ${score}`, canvas.width/2, canvas.height/2 + 18);
+  ctx.restore();
+}
+
+function onHit() {
   if (!running) return;
-
-  const elapsed = (Date.now() - startTime) / 1000;
-  if (elapsed >= 120) return onWin(); // 2 minutes = win
-
-  spawnCounter++;
-  if (spawnCounter > 70 - difficultySpeed * 3) {
-    spawnCounter = 0;
-    spawnObstacle();
-  }
-
-  difficultySpeed += 0.0015; // smooth difficulty ramp
-
-  // MOVEMENT
-  if (holding) player.vy = jumpStrength;
-  else player.vy += gravity;
-
-  player.y += player.vy;
-
-  // LIMIT PLAYER INSIDE SCREEN
-  if (player.y < player.radius) player.y = player.radius;
-  if (player.y > canvas.height - player.radius)
-    player.y = canvas.height - player.radius;
-
-  // TRAIL A (long neon)
-  player.trail.push({ x: player.x, y: player.y });
-  if (player.trail.length > 50) player.trail.shift();
-
-  // UPDATE OBSTACLES
-  for (let i = obstacles.length - 1; i >= 0; i--) {
-    const ob = obstacles[i];
-    ob.x -= difficultySpeed;
-
-    const topH = ob.centerY - ob.gap / 2;
-    const botY = ob.centerY + ob.gap / 2;
-    const botH = canvas.height - botY;
-
-    if (
-      circleRectCollision(player.x, player.y, player.radius, ob.x, 0, ob.width, topH) ||
-      circleRectCollision(player.x, player.y, player.radius, ob.x, botY, ob.width, botH)
-    ) {
-      return onHit();
-    }
-
-    if (!ob.passed && ob.x + ob.width < player.x) {
-      score++;
-      scoreEl.textContent = "Score: " + score;
-      ob.passed = true;
-    }
-
-    if (ob.x + ob.width < 0) obstacles.splice(i, 1);
-  }
-
-  render();
-  requestAnimationFrame(update);
+  console.log('Hit!');
+  running = false;
+  player.state = 'hit';
+  try { hitSound.currentTime = 0; hitSound.play(); } catch(e){ console.warn('hit sound playback failed', e); }
+  restartBtn.style.display = 'inline-block';
+  restartBtn.setAttribute('aria-hidden', 'false');
+  showEndOverlay('Game Over');
 }
 
-// RENDER EVERYTHING
-function render() {
-  // NEON BACKGROUND (Option C)
-  const grd = ctx.createRadialGradient(
-    canvas.width / 2,
-    canvas.height / 2,
-    60,
-    canvas.width / 2,
-    canvas.height / 2,
-    canvas.width
-  );
-  grd.addColorStop(0, "#4b0082");
-  grd.addColorStop(1, "#0b0015");
-  ctx.fillStyle = grd;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+function onWin() {
+  if (!running) return;
+  console.log('Win!');
+  running = false;
+  player.state = 'win';
+  try { winSound.currentTime = 0; winSound.play(); } catch(e){ console.warn('win sound playback failed', e); }
+  restartBtn.style.display = 'inline-block';
+  restartBtn.setAttribute('aria-hidden', 'false');
+  showEndOverlay('YOU WIN!');
+}
 
-  // TRAIL (white neon long)
+// ---------- Render helpers ----------
+function neonBackground() {
+  // Option C radial neon: draw to canvas for consistent look across devices
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+  const r = Math.max(canvas.width, canvas.height) * 0.8;
+  const g = ctx.createRadialGradient(cx, cy*0.9, 60, cx, cy, r);
+  g.addColorStop(0, '#4b0082');
+  g.addColorStop(0.55, '#26002a');
+  g.addColorStop(1, '#120024');
+  ctx.fillStyle = g;
+  // cover in CSS pixels (ctx already scaled)
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+}
+
+function drawTrail() {
+  // Trail A: long smooth fading trail
+  if (player.trail.length < 2) return;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
   for (let i = 0; i < player.trail.length - 1; i++) {
     const a = player.trail[i];
-    const b = player.trail[i + 1];
-    const alpha = i / player.trail.length;
-    ctx.strokeStyle = `rgba(255,255,255,${alpha * 0.5})`;
-    ctx.lineWidth = 4;
+    const b = player.trail[i+1];
+    const t = i / player.trail.length;
+    const alpha = 0.02 + 0.7 * t; // long fade
+    ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+    ctx.lineWidth = 4 + 2 * t;
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
     ctx.stroke();
   }
+}
 
-  // OBSTACLES (white neon triangles)
-  ctx.fillStyle = "rgba(255,255,255,0.15)";
-  ctx.strokeStyle = "white";
-  ctx.lineWidth = 3;
+function drawPlayer() {
+  ctx.save();
+  ctx.translate(player.x, player.y);
+  // glow behind
+  const glowR = player.radius * 1.6;
+  const grad = ctx.createRadialGradient(0, 0, 1, 0, 0, glowR);
+  grad.addColorStop(0, 'rgba(220,180,255,0.18)');
+  grad.addColorStop(1, 'rgba(120,30,100,0.00)');
+  ctx.fillStyle = grad;
+  ctx.beginPath(); ctx.arc(0,0,glowR,0,Math.PI*2); ctx.fill();
 
+  // draw image (use correct image based on state if loaded)
+  const img = (player.state === 'hit') ? playerHitImg : (player.state === 'win' ? playerWinImg : playerImg);
+  if (img && img.complete && img.naturalWidth) {
+    ctx.drawImage(img, -player.radius, -player.radius, player.radius*2, player.radius*2);
+  } else {
+    // fallback circle if image missing
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(0,0,player.radius,0,Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawObstacles() {
   obstacles.forEach(ob => {
-    const topH = ob.centerY - ob.gap / 2;
-    const botY = ob.centerY + ob.gap / 2;
-    const botH = canvas.height - botY;
+    const osc = Math.sin((performance.now()/1000) * ob.osc * 2 * Math.PI);
+    const centerY = ob.centerY + osc * 18 * ob.osc; // small vertical oscillation
+    const topH = centerY - ob.gap/2;
+    const botY = centerY + ob.gap/2;
 
-    // top triangle
+    // neon triangle outlines (top)
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = 2.6;
     ctx.beginPath();
     ctx.moveTo(ob.x, topH);
-    ctx.lineTo(ob.x + ob.width / 2, topH - 80);
+    ctx.lineTo(ob.x + ob.width/2, topH - Math.min(120, ob.width));
     ctx.lineTo(ob.x + ob.width, topH);
     ctx.closePath();
     ctx.stroke();
@@ -198,53 +246,114 @@ function render() {
     // bottom triangle
     ctx.beginPath();
     ctx.moveTo(ob.x, botY);
-    ctx.lineTo(ob.x + ob.width / 2, botY + 80);
+    ctx.lineTo(ob.x + ob.width/2, botY + Math.min(120, ob.width));
     ctx.lineTo(ob.x + ob.width, botY);
     ctx.closePath();
     ctx.stroke();
+
+    // filled side blocks (for clarity & collision)
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    ctx.fillRect(ob.x, 0, ob.width, topH);
+    ctx.fillRect(ob.x, botY, ob.width, canvas.height - botY);
+
+    // subtle outline rects
+    ctx.strokeStyle = 'rgba(200,160,255,0.06)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(ob.x, 0, ob.width, topH);
+    ctx.strokeRect(ob.x, botY, ob.width, canvas.height - botY);
   });
-
-  // PLAYER
-  ctx.save();
-  ctx.translate(player.x, player.y);
-  ctx.drawImage(
-    player.state === "hit" ? hitImg :
-    player.state === "win" ? winImg :
-    playerImg,
-    -player.radius, -player.radius,
-    player.radius * 2, player.radius * 2
-  );
-  ctx.restore();
 }
 
-// HIT EVENT
-function onHit() {
-  running = false;
-  player.state = "hit";
-  hitSound.play();
+// ---------- Main loop ----------
+function loop(now) {
+  if (!startTimestamp) startTimestamp = now;
+  if (!running) return; // stop updating if not running
 
-  restartBtn.style.display = "inline-block";
-  restartBtn.addEventListener("touchstart", () => location.reload());
-  restartBtn.addEventListener("click", () => location.reload());
+  const elapsedMs = now - startTimestamp;
+  const elapsedSec = Math.floor(elapsedMs / 1000);
+  timeEl.textContent = `Time: ${elapsedSec}s`;
+
+  // win at 120s (2 minutes)
+  if (elapsedSec >= 120) {
+    onWin();
+    return;
+  }
+
+  // update spawn
+  spawnCounter++;
+  const spawnInterval = Math.max(40, 90 - Math.round(difficultySpeed * 6)); // spawn faster with difficulty
+  if (spawnCounter >= spawnInterval) {
+    spawnCounter = 0;
+    spawnObstacle();
+  }
+
+  // difficulty increases slowly over time
+  difficultySpeed = 3 + (elapsedMs / 60000) * 2.5; // +2.5 over one minute as an example
+
+  // player physics
+  if (holding) {
+    player.vy = JUMP;
+  } else {
+    player.vy += GRAVITY;
+  }
+
+  // clamp vertical velocity for stability
+  if (player.vy < -12) player.vy = -12;
+  if (player.vy > 22) player.vy = 22;
+
+  player.y += player.vy;
+
+  // clamp player inside screen
+  if (player.y < player.radius) {
+    player.y = player.radius;
+    player.vy = 0;
+  }
+  if (player.y > canvas.height - player.radius) {
+    player.y = canvas.height - player.radius;
+    player.vy = 0;
+  }
+
+  // trail handling (Trail A long)
+  player.trail.push({x: player.x, y: player.y});
+  if (player.trail.length > 60) player.trail.shift();
+
+  // update obstacles & collisions
+  for (let i = obstacles.length - 1; i >= 0; i--) {
+    const ob = obstacles[i];
+    ob.x -= difficultySpeed;
+
+    const osc = Math.sin((performance.now()/1000) * ob.osc * 2 * Math.PI);
+    const centerY = ob.centerY + osc * 18 * ob.osc;
+    const topH = centerY - ob.gap/2;
+    const botY = centerY + ob.gap/2;
+
+    // collision checks (rects)
+    if (circleRectCollision(player.x, player.y, player.radius, ob.x, 0, ob.width, topH) ||
+        circleRectCollision(player.x, player.y, player.radius, ob.x, botY, ob.width, canvas.height - botY)) {
+      onHit();
+      return;
+    }
+
+    // score increment once player passes obstacle
+    if (!ob.passed && (ob.x + ob.width) < player.x) {
+      ob.passed = true;
+      score++;
+      scoreEl.textContent = `Score: ${score}`;
+    }
+
+    // remove off-screen obstacles
+    if (ob.x + ob.width < -50) obstacles.splice(i, 1);
+  }
+
+  // render
+  neonBackground();
+  drawTrail();
+  drawObstacles();
+  drawPlayer();
+
+  // loop
+  requestAnimationFrame(loop);
 }
 
-// WIN EVENT (2 min)
-function onWin() {
-  running = false;
-  player.state = "win";
-  winSound.play();
-
-  ctx.fillStyle = "rgba(0,0,0,0.5)";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  ctx.fillStyle = "white";
-  ctx.font = "40px Arial";
-  ctx.textAlign = "center";
-  ctx.fillText("YOU WIN!", canvas.width / 2, canvas.height / 2);
-
-  restartBtn.style.display = "inline-block";
-  restartBtn.addEventListener("click", () => location.reload());
-}
-
-// START GAME
-update();
+// ---------- Start the game ----------
+resetGame(); // initializes startTimestamp and begins loop
