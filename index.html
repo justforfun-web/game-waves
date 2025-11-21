@@ -7,11 +7,12 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <canvas id="gameCanvas"></canvas>
+  <canvas id="gameCanvas" aria-label="Game canvas"></canvas>
 
-  <div id="hud">
+  <div id="hud" role="status" aria-live="polite">
     <div id="score">Score: 0</div>
-    <button id="restart" style="display:none">Restart</button>
+    <div id="time">Time: 0s</div>
+    <button id="restart" style="display:none" aria-hidden="true">Restart</button>
   </div>
 
   <script src="script.js"></script>
