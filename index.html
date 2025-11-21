@@ -1,26 +1,21 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Space Waves</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Space Waves — Flap & Wave</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <canvas id="gameCanvas"></canvas>
 
-    <canvas id="gameCanvas"></canvas>
+  <!-- Optional: simple UI -->
+  <div id="hud">
+    <div id="score">Score: 0</div>
+    <div id="speed">Speed: 1.0x</div>
+    <button id="restart" style="display:none">Restart</button>
+  </div>
 
-    <!-- Mobile Controls -->
-    <div id="controls">
-        <button id="leftBtn">◀</button>
-        <button id="shootBtn">🔥</button>
-        <button id="rightBtn">▶</button>
-    </div>
-
-    <!-- Music Toggle -->
-    <button id="musicToggle">🔊</button>
-
-    <script src="script.js"></script>
-
+  <script src="script.js"></script>
 </body>
 </html>
