@@ -1,161 +1,164 @@
-// Canvas Setup
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
+
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
-// Load Assets
-const playerImg = new Image();
-playerImg.src = "assets/player.png";
+// Load Images
+const imgNormal = new Image();
+imgNormal.src = "assets/player_normal.png";
 
-const enemyImg = new Image();
-enemyImg.src = "assets/enemy.png";
+const imgHit = new Image();
+imgHit.src = "assets/player_hit.png";
 
-const bgMusic = new Audio("assets/bg-music.mp3");
-bgMusic.loop = true;
+const imgWin = new Image();
+imgWin.src = "assets/player_win.png";
 
-const shootSound = new Audio("assets/shoot.mp3");
-const hitSound   = new Audio("assets/hit.mp3");
+// Sounds
+const hitSound = new Audio("assets/hit.mp3");
+const winSound = new Audio("assets/win.mp3");
 
-// Game Variables
-let player = { x: canvas.width/2, y: canvas.height - 120, size: 60, dx: 0 };
+// Player State
+let playerState = "normal"; 
+// normal | hit | win
+
+// Player Object
+const player = {
+    x: canvas.width / 2 - 25,
+    y: canvas.height - 120,
+    width: 70,
+    height: 70,
+    speed: 8,
+    hitTimer: 0
+};
+
+// Bullets + Enemies
 let bullets = [];
 let enemies = [];
-let stars = [];
+let enemyTimer = 0;
 let score = 0;
+const WIN_SCORE = 20;
 
-// Star Background
-function createStars() {
-    for (let i = 0; i < 100; i++) {
-        stars.push({
-            x: Math.random() * canvas.width,
-            y: Math.random() * canvas.height,
-            size: Math.random() * 2,
-            speed: Math.random() * 2 + 1
-        });
-    }
+// Mobile Buttons
+document.getElementById("leftBtn").onmousedown = () => moveLeft = true;
+document.getElementById("rightBtn").onmousedown = () => moveRight = true;
+document.getElementById("shootBtn").onmousedown = shoot;
+document.onmouseup = () => { moveLeft = false; moveRight = false; };
+
+let moveLeft = false;
+let moveRight = false;
+
+// Shooting
+function shoot() {
+    bullets.push({ x: player.x + 25, y: player.y, width: 10, height: 20 });
 }
-createStars();
+
+// Spawn enemies
+function createEnemy() {
+    enemies.push({
+        x: Math.random() * (canvas.width - 40),
+        y: -50,
+        width: 40,
+        height: 40
+    });
+}
+
+function update() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Win state
+    if (playerState === "win") {
+        ctx.drawImage(imgWin, player.x, player.y, player.width, player.height);
+        return;
+    }
+
+    // Player movement
+    if (moveLeft && player.x > 0) player.x -= player.speed;
+    if (moveRight && player.x < canvas.width - player.width) player.x += player.speed;
+
+    // Draw Player by State
+    if (playerState === "normal") {
+        ctx.drawImage(imgNormal, player.x, player.y, player.width, player.height);
+    }
+    if (playerState === "hit") {
+        ctx.drawImage(imgHit, player.x, player.y, player.width, player.height);
+
+        player.hitTimer--;
+        if (player.hitTimer <= 0) playerState = "normal";
+    }
+
+    // Update Bullets
+    bullets.forEach((b, i) => {
+        b.y -= 10;
+        ctx.fillStyle = "yellow";
+        ctx.fillRect(b.x, b.y, b.width, b.height);
+        if (b.y < 0) bullets.splice(i, 1);
+    });
+
+    // Spawn enemies
+    enemyTimer++;
+    if (enemyTimer % 50 === 0) createEnemy();
+
+    // Update Enemies
+    enemies.forEach((e, ei) => {
+        e.y += 3;
+        ctx.fillStyle = "red";
+        ctx.fillRect(e.x, e.y, e.width, e.height);
+
+        // Remove off-screen
+        if (e.y > canvas.height) enemies.splice(ei, 1);
+
+        // Player hit collision
+        if (
+            player.x < e.x + e.width &&
+            player.x + player.width > e.x &&
+            player.y < e.y + e.height &&
+            player.y + player.height > e.y
+        ) {
+            playerState = "hit";
+            player.hitTimer = 30;
+            hitSound.play();
+            enemies.splice(ei, 1);
+        }
+
+        // Bullet hits enemy
+        bullets.forEach((b, bi) => {
+            if (
+                b.x < e.x + e.width &&
+                b.x + b.width > e.x &&
+                b.y < e.y + e.height &&
+                b.y + b.height > e.y
+            ) {
+                enemies.splice(ei, 1);
+                bullets.splice(bi, 1);
+                score++;
+
+                // WIN CONDITION
+                if (score >= WIN_SCORE) {
+                    playerState = "win";
+                    winSound.play();
+                }
+            }
+        });
+    });
+
+    drawStars();
+
+    requestAnimationFrame(update);
+}
+
+// STAR BACKGROUND
+let stars = [];
+for (let i = 0; i < 100; i++)
+    stars.push({ x: Math.random() * canvas.width, y: Math.random() * canvas.height });
 
 function drawStars() {
     ctx.fillStyle = "white";
     stars.forEach(s => {
-        ctx.fillRect(s.x, s.y, s.size, s.size);
-        s.y += s.speed;
-        if (s.y > canvas.height) { s.y = 0; }
+        ctx.fillRect(s.x, s.y, 2, 2);
+        s.y += 1;
+        if (s.y > canvas.height) s.y = 0;
     });
 }
 
-// Draw Player
-function drawPlayer() {
-    ctx.drawImage(playerImg, player.x - 30, player.y - 30, 60, 60);
-}
-
-// Draw Bullets
-function drawBullets() {
-    ctx.fillStyle = "cyan";
-    bullets.forEach(b => ctx.fillRect(b.x, b.y, 4, 15));
-}
-
-// Draw Enemies
-function drawEnemies() {
-    enemies.forEach(e => {
-        ctx.drawImage(enemyImg, e.x, e.y, e.size, e.size);
-    });
-}
-
-// Movement
-function movePlayer() {
-    player.x += player.dx;
-}
-
-function moveBullets() {
-    bullets.forEach((b,i)=>{
-        b.y -= 10;
-        if (b.y < 0) bullets.splice(i, 1);
-    });
-}
-
-function moveEnemies() {
-    enemies.forEach((e,i)=>{
-        e.y += 4;
-        if (e.y > canvas.height) enemies.splice(i,1);
-    });
-}
-
-// Collision
-function detectCollisions() {
-    bullets.forEach((b, bi) => {
-        enemies.forEach((e, ei) => {
-            if (b.x > e.x && b.x < e.x + e.size && b.y < e.y + e.size) {
-                enemies.splice(ei, 1);
-                bullets.splice(bi, 1);
-                hitSound.currentTime = 0;
-                hitSound.play();
-                score++;
-            }
-        });
-    });
-}
-
-// Spawn Enemies
-function spawnEnemies() {
-    if (Math.random() < 0.03) {
-        enemies.push({
-            x: Math.random() * (canvas.width - 50),
-            y: -50,
-            size: 50
-        });
-    }
-}
-
-// Shoot
-function shoot() {
-    bullets.push({ x: player.x, y: player.y });
-    shootSound.currentTime = 0;
-    shootSound.play();
-}
-
-// Game Loop
-function gameLoop() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    drawStars();
-    drawPlayer();
-    drawBullets();
-    drawEnemies();
-
-    movePlayer();
-    moveBullets();
-    moveEnemies();
-    detectCollisions();
-    spawnEnemies();
-
-    requestAnimationFrame(gameLoop);
-}
-gameLoop();
-
-// Keyboard Controls
-document.addEventListener("keydown", e => {
-    if (e.key === "ArrowLeft") player.dx = -7;
-    if (e.key === "ArrowRight") player.dx = 7;
-    if (e.key === " ") shoot();
-});
-
-document.addEventListener("keyup", e => {
-    if (e.key === "ArrowLeft" || e.key === "ArrowRight") player.dx = 0;
-});
-
-// MOBILE BUTTONS
-document.getElementById("leftBtn").addEventListener("touchstart", () => player.dx = -7);
-document.getElementById("rightBtn").addEventListener("touchstart", () => player.dx = 7);
-document.getElementById("shootBtn").addEventListener("touchstart", shoot);
-
-document.getElementById("leftBtn").addEventListener("touchend", () => player.dx = 0);
-document.getElementById("rightBtn").addEventListener("touchend", () => player.dx = 0);
-
-// MUSIC TOGGLE
-document.getElementById("musicToggle").addEventListener("click", () => {
-    if (bgMusic.paused) { bgMusic.play(); }
-    else { bgMusic.pause(); }
-});
+update();
