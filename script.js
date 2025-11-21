@@ -6,17 +6,17 @@ canvas.height = window.innerHeight;
 
 // Load Images (USE CORRECT PATHS)
 const imgNormal = new Image();
-imgNormal.src = "ASSETS/player_normal.png";   // change to your actual file
+imgNormal.src = "assets/player_normal.png";   // change to your actual file
 
 const imgHit = new Image();
-imgHit.src = "ASSETS/player_hit.png";         // change to your actual file
+imgHit.src = "assets/player_hit.png";         // change to your actual file
 
 const imgWin = new Image();
-imgWin.src = "ASSETS/player_win.png";         // change to your actual file
+imgWin.src = "assets/player_win.png";         // change to your actual file
 
 // Sounds
-const hitSound = new Audio("ASSETS/player_hit.m4a");
-const winSound = new Audio("ASSETS/player_win.m4a");
+const hitSound = new Audio("assets/player_hit.m4a");
+const winSound = new Audio("assets/player_win.m4a");
 
 // Player State
 let playerState = "normal"; // normal | hit | win
